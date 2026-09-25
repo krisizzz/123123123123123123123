@@ -9,15 +9,11 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 # ================== CONFIGURATION ==================
 TELEGRAM_TOKEN = "8996725656:AAGVkpKzTuDtXkVmd15KIJucgCY-tsxkBUs"
 
-# Admin ID — receives errors and can use /stats
 ADMIN_ID = 8961457975
-
-# File where subscriber IDs are stored
 SUBSCRIBERS_FILE = "subscribers.json"
 
-# --- Location: Mogilev, Belarus ---
-LAT = 53.9
-LON = 30.33
+# --- OpenWeatherMap ---
+OPENWEATHER_API_KEY = "ad20dbbdbcbc4ab10217df049c9150fa"
 CITY = "Могилёв"
 TIMEZONE = "Europe/Minsk"
 
@@ -33,75 +29,26 @@ LESSON_TIMES = {
 }
 
 WEEKLY_SCHEDULE = {
-    0: {
-        2: "Русский язык",
-        3: "Английский язык",
-        4: "Русская литература",
-        5: "География",
-        6: "Математика",
-        7: "Классный час",
-    },
-    1: {
-        2: "Физика",
-        3: "Химия",
-        4: "Английский язык",
-        5: "Всемирная история",
-        6: "Математика",
-    },
-    2: {
-        2: "История Беларуси",
-        3: "Математика",
-        4: "Биология",
-        5: "Белорусский язык",
-        6: "Белорусская литература",
-        7: "Факультатив по истории",
-    },
-    3: {
-        2: "Русский язык",
-        3: "Физика",
-        4: "География",
-        5: "Информатика / Английский язык",
-        6: "Английский язык / Информатика",
-        7: "Русская литература",
-        8: "Информационный час",
-    },
-    4: {
-        2: "Физика",
-        3: "Математика",
-        4: "Химия",
-        5: "Обществоведение",
-        6: "Белорусский язык",
-        7: "Искусство",
-    },
+    0: {2: "Русский язык", 3: "Английский язык", 4: "Русская литература",
+        5: "География", 6: "Математика", 7: "Классный час"},
+    1: {2: "Физика", 3: "Химия", 4: "Английский язык",
+        5: "Всемирная история", 6: "Математика"},
+    2: {2: "История Беларуси", 3: "Математика", 4: "Биология",
+        5: "Белорусский язык", 6: "Белорусская литература", 7: "Факультатив по истории"},
+    3: {2: "Русский язык", 3: "Физика", 4: "География",
+        5: "Информатика / Английский язык", 6: "Английский язык / Информатика",
+        7: "Русская литература", 8: "Информационный час"},
+    4: {2: "Физика", 3: "Математика", 4: "Химия",
+        5: "Обществоведение", 6: "Белорусский язык", 7: "Искусство"},
 }
 
-WEEKDAY_NAMES = {
-    0: "Понедельник",
-    1: "Вторник",
-    2: "Среда",
-    3: "Четверг",
-    4: "Пятница",
-}
-
-WEATHER_CODES = {
-    0: "Ясно", 1: "Преимущественно ясно", 2: "Переменная облачность", 3: "Пасмурно",
-    45: "Туман", 48: "Изморозь",
-    51: "Слабая морось", 53: "Умеренная морось", 55: "Сильная морось",
-    56: "Слабая ледяная морось", 57: "Сильная ледяная морось",
-    61: "Слабый дождь", 63: "Умеренный дождь", 65: "Сильный дождь",
-    66: "Слабый ледяной дождь", 67: "Сильный ледяной дождь",
-    71: "Слабый снег", 73: "Умеренный снег", 75: "Сильный снег",
-    77: "Снежная крупа",
-    80: "Слабый ливень", 81: "Умеренный ливень", 82: "Сильный ливень",
-    85: "Слабый снегопад", 86: "Сильный снегопад",
-    95: "Гроза", 96: "Гроза с градом", 99: "Сильная гроза с градом",
-}
+WEEKDAY_NAMES = {0: "Понедельник", 1: "Вторник", 2: "Среда",
+                 3: "Четверг", 4: "Пятница"}
 # ===================================================
 
 application: Application = None
 
 
-# ---------- Subscribers storage ----------
 def load_subscribers() -> set:
     if not os.path.exists(SUBSCRIBERS_FILE):
         return set()
@@ -120,7 +67,6 @@ def save_subscribers(subs: set):
 subscribers: set = load_subscribers()
 
 
-# ---------- Report builder ----------
 def build_report() -> str:
     """Build the daily report text (schedule + weather)."""
     now = datetime.now()
@@ -144,30 +90,28 @@ def build_report() -> str:
     advice = ""
 
     try:
-        url = "https://api.open-meteo.com/v1/forecast"
+        url = "http://api.openweathermap.org/data/2.5/weather"
         params = {
-            "latitude": LAT,
-            "longitude": LON,
-            "current": "temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m",
-            "timezone": TIMEZONE,
+            "q": CITY,
+            "appid": OPENWEATHER_API_KEY,
+            "units": "metric",
+            "lang": "ru",
         }
         resp = requests.get(url, params=params, timeout=10)
         data = resp.json()
 
-        if "current" in data:
-            cur = data["current"]
-            temp = round(cur["temperature_2m"])
-            feels_like = round(cur["apparent_temperature"])
-            humidity = cur["relative_humidity_2m"]
-            wind = cur["wind_speed_10m"]
-            code = cur["weather_code"]
-            desc = WEATHER_CODES.get(code, "Неизвестно")
+        if str(data.get("cod")) == "200":
+            temp = round(data["main"]["temp"])
+            feels_like = round(data["main"]["feels_like"])
+            humidity = data["main"]["humidity"]
+            wind = data["wind"]["speed"]
+            desc = data["weather"][0]["description"].capitalize()
 
             weather_info = (
                 f"🌡 Температура: {temp}°C (ощущается как {feels_like}°C)\n"
                 f"☁️ Состояние: {desc}\n"
                 f"💧 Влажность: {humidity}%\n"
-                f"💨 Ветер: {wind} км/ч"
+                f"💨 Ветер: {wind} м/с"
             )
 
             if temp <= 0:
@@ -186,10 +130,11 @@ def build_report() -> str:
                 advice += "\n☔ Ожидается дождь — возьми зонт!"
             if "снег" in desc_lower:
                 advice += "\n❄️ Ожидается снег — одевайся теплее и смотри под ноги."
-            if wind > 30:
+            if wind > 10:
                 advice += "\n🌬 Сильный ветер — держи шапку!"
         else:
-            weather_info = f"Ошибка запроса погоды: {data}"
+            error_msg = data.get("message", "неизвестная ошибка")
+            weather_info = f"Ошибка запроса погоды: {error_msg}"
     except Exception as e:
         weather_info = f"Ошибка запроса погоды: {e}"
 
@@ -209,13 +154,11 @@ def build_report() -> str:
     )
 
 
-# ---------- Broadcast ----------
 async def send_daily_report():
     """Send report to all subscribers. Runs Mon–Fri at 6:50."""
     now = datetime.now()
     if now.weekday() > 4:
         return
-
     text = build_report()
     if not text:
         return
@@ -228,13 +171,11 @@ async def send_daily_report():
             print(f"⚠️ Не удалось отправить {uid}: {e}")
             dead.add(uid)
 
-    # Remove users who blocked the bot
     if dead:
         subscribers.difference_update(dead)
         save_subscribers(subscribers)
 
 
-# ---------- Handlers ----------
 async def start_handler(update, context):
     uid = update.effective_chat.id
     if uid not in subscribers:
@@ -245,8 +186,7 @@ async def start_handler(update, context):
         added = False
 
     await update.message.reply_text(
-        f"🤖 Привет! Ты подписан на ежедневную рассылку "
-        f"расписания и погоды.\n"
+        f"🤖 Привет! Ты подписан на ежедневную рассылку расписания и погоды.\n"
         f"Каждый день в 06:50 (Пн–Пт) буду присылать отчёт.\n\n"
         f"Твой ID: {uid}\n"
         f"{'✅ Ты добавлен в список.' if added else 'ℹ️ Ты уже в списке.'}"
@@ -284,7 +224,6 @@ async def stats_handler(update, context):
 
 
 async def broadcast_handler(update, context):
-    """Admin-only: /broadcast <text> — sends text to all subscribers."""
     uid = update.effective_chat.id
     if uid != ADMIN_ID:
         await update.message.reply_text("Команда только для администратора.")
@@ -303,7 +242,6 @@ async def broadcast_handler(update, context):
     await update.message.reply_text(f"✅ Отправлено {sent} получателям.")
 
 
-# ---------- Bootstrap ----------
 async def post_init(app: Application):
     scheduler = AsyncIOScheduler(timezone=TIMEZONE)
     scheduler.add_job(
